@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- *******************************************************************************
+  Copyright (c) 2026 Contributors to the Eclipse Foundation
+
+  See the NOTICE file(s) distributed with this work for additional
+  information regarding copyright ownership.
+
+  This program and the accompanying materials are made available under the
+  terms of the Apache License Version 2.0 which is available at
+  https://www.apache.org/licenses/LICENSE-2.0
+
+  SPDX-License-Identifier: Apache-2.0
+******************************************************************************* -->
+<!--
+  XML report written by GoogleTest v1.17.0 (gtest_output=xml, linked against
+  gtest_main). GoogleTest v1.18.0 writes the same report apart from time and
+  timestamp values. Only the absolute source path was replaced by 'src/gtest/'.
+  Source of the test program:
+
+  #include <gtest/gtest.h>
+  // (a) failure in SetUpTestSuite (ADD_FAILURE: non-fatal)
+  class SetUpSuiteAddFailure : public ::testing::Test {
+   protected:
+    static void SetUpTestSuite() { ADD_FAILURE() << "failure in SetUpTestSuite"; }
+  };
+  TEST_F(SetUpSuiteAddFailure, First) { EXPECT_EQ(1, 1); }
+  TEST_F(SetUpSuiteAddFailure, Second) { EXPECT_EQ(1, 1); }
+  // (a') fatal failure in SetUpTestSuite (ASSERT/FAIL)
+  class SetUpSuiteFatal : public ::testing::Test {
+   protected:
+    static void SetUpTestSuite() { FAIL() << "fatal failure in SetUpTestSuite"; }
+  };
+  TEST_F(SetUpSuiteFatal, First) { EXPECT_EQ(1, 1); }
+  TEST_F(SetUpSuiteFatal, Second) { EXPECT_EQ(1, 1); }
+  // unaffected suite in the same binary
+  TEST(Healthy, Passes) { EXPECT_EQ(1, 1); }
+-->
+<testsuites tests="5" failures="0" disabled="0" errors="0" time="0.012" timestamp="2026-10-30T21:50:35.895" name="AllTests">
+  <testsuite name="SetUpSuiteAddFailure" tests="2" failures="0" disabled="0" skipped="2" errors="0" time="0.003" timestamp="2026-10-30T21:50:35.898">
+    <testcase name="First" file="src/gtest/setup_suite_fail.cpp" line="7" status="run" result="skipped" time="0." timestamp="1970-01-01T01:00:00.000" classname="SetUpSuiteAddFailure">
+      <skipped message="src/gtest/setup_suite_fail.cpp:7&#x0A;"><![CDATA[src/gtest/setup_suite_fail.cpp:7
+]]></skipped>
+    </testcase>
+    <testcase name="Second" file="src/gtest/setup_suite_fail.cpp" line="8" status="run" result="skipped" time="0." timestamp="1970-01-01T01:00:00.000" classname="SetUpSuiteAddFailure">
+      <skipped message="src/gtest/setup_suite_fail.cpp:8&#x0A;"><![CDATA[src/gtest/setup_suite_fail.cpp:8
+]]></skipped>
+    </testcase>
+    <testcase name="" status="run" result="completed" classname="" time="0." timestamp="1970-01-01T01:00:00.000">
+      <failure message="src/gtest/setup_suite_fail.cpp:5&#x0A;Failed&#x0A;failure in SetUpTestSuite&#x0A;" type=""><![CDATA[src/gtest/setup_suite_fail.cpp:5
+Failed
+failure in SetUpTestSuite
+]]></failure>
+    </testcase>
+  </testsuite>
+  <testsuite name="SetUpSuiteFatal" tests="2" failures="0" disabled="0" skipped="2" errors="0" time="0.002" timestamp="2026-10-30T21:50:35.903">
+    <testcase name="First" file="src/gtest/setup_suite_fail.cpp" line="14" status="run" result="skipped" time="0." timestamp="1970-01-01T01:00:00.000" classname="SetUpSuiteFatal">
+      <skipped message="src/gtest/setup_suite_fail.cpp:14&#x0A;"><![CDATA[src/gtest/setup_suite_fail.cpp:14
+]]></skipped>
+    </testcase>
+    <testcase name="Second" file="src/gtest/setup_suite_fail.cpp" line="15" status="run" result="skipped" time="0." timestamp="1970-01-01T01:00:00.000" classname="SetUpSuiteFatal">
+      <skipped message="src/gtest/setup_suite_fail.cpp:15&#x0A;"><![CDATA[src/gtest/setup_suite_fail.cpp:15
+]]></skipped>
+    </testcase>
+    <testcase name="" status="run" result="completed" classname="" time="0." timestamp="1970-01-01T01:00:00.000">
+      <failure message="src/gtest/setup_suite_fail.cpp:12&#x0A;Failed&#x0A;fatal failure in SetUpTestSuite&#x0A;" type=""><![CDATA[src/gtest/setup_suite_fail.cpp:12
+Failed
+fatal failure in SetUpTestSuite
+]]></failure>
+    </testcase>
+  </testsuite>
+  <testsuite name="Healthy" tests="1" failures="0" disabled="0" skipped="0" errors="0" time="0." timestamp="2026-10-30T21:50:35.906">
+    <testcase name="Passes" file="src/gtest/setup_suite_fail.cpp" line="17" status="run" result="completed" time="0." timestamp="2026-10-30T21:50:35.906" classname="Healthy" />
+  </testsuite>
+</testsuites>

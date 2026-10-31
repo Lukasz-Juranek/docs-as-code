@@ -176,6 +176,12 @@ def test_feature():
      - Also parses metadata according to the [metadata rules](#repo-metadata-rules)
 
    - Cases without metadata are logged out as info (not errors).
+   - GoogleTest reports a failure outside of any test body (`SetUpTestSuite`,
+     `TearDownTestSuite` or a global `::testing::Environment`) as an entry
+     without name and classname. Such an entry is not turned into a testcase.
+     Instead, every testcase of the affected testsuite (or, for the global
+     environment, of the whole `test.xml`) that would be `passed` is reported
+     as `failed`.
    - Test cases with metadata are converted into:
      - `DataFromTestCase` (used for external needs)
      - `DataForTestLink` (used for linking tests to requirements)

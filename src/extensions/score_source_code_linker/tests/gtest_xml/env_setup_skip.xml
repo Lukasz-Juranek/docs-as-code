@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- *******************************************************************************
+  Copyright (c) 2026 Contributors to the Eclipse Foundation
+
+  See the NOTICE file(s) distributed with this work for additional
+  information regarding copyright ownership.
+
+  This program and the accompanying materials are made available under the
+  terms of the Apache License Version 2.0 which is available at
+  https://www.apache.org/licenses/LICENSE-2.0
+
+  SPDX-License-Identifier: Apache-2.0
+******************************************************************************* -->
+<!--
+  XML report written by GoogleTest v1.17.0 (gtest_output=xml, linked against
+  gtest_main). GoogleTest v1.18.0 writes the same report apart from time and
+  timestamp values. Only the absolute source path was replaced by 'src/gtest/'.
+  Source of the test program:
+
+  #include <gtest/gtest.h>
+  // (e) GTEST_SKIP in global Environment::SetUp
+  class SkippingEnv : public ::testing::Environment {
+   public:
+    void SetUp() override { GTEST_SKIP() << "skipped in Environment::SetUp"; }
+  };
+  ::testing::Environment* const g_env = ::testing::AddGlobalTestEnvironment(new SkippingEnv);
+  TEST(EnvSuite, Skipped) { EXPECT_EQ(1, 1); }
+  TEST(EnvSuite, AlsoSkipped) { EXPECT_EQ(1, 1); }
+-->
+<testsuites tests="2" failures="0" disabled="0" errors="0" time="0.003" timestamp="2026-10-30T21:50:39.993" name="AllTests">
+  <testsuite name="EnvSuite" tests="2" failures="0" disabled="0" skipped="0" errors="0" time="0." timestamp="1970-01-01T01:00:00.000">
+    <testcase name="Skipped" file="src/gtest/env_setup_skip.cpp" line="8" status="run" result="completed" time="0." timestamp="1970-01-01T01:00:00.000" classname="EnvSuite" />
+    <testcase name="AlsoSkipped" file="src/gtest/env_setup_skip.cpp" line="9" status="run" result="completed" time="0." timestamp="1970-01-01T01:00:00.000" classname="EnvSuite" />
+  </testsuite>
+</testsuites>
