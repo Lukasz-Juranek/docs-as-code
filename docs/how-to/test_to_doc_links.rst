@@ -193,3 +193,8 @@ Limitations
 
 - Tests must be executed by Bazel before building docs so ``test.xml`` files exist.
 - Not compatible with Esbonio / live preview because generated test results are unavailable there.
+- A gTest failure in ``SetUpTestSuite``, ``TearDownTestSuite`` or a global
+  test environment marks the affected testcases as ``failed`` (or keeps them
+  ``skipped`` if gTest skipped them). A ``GTEST_SKIP()`` in a global test
+  environment ``SetUp`` cannot be detected: gTest reports the testcases that
+  did not run like passed ones.

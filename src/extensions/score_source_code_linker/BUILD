@@ -27,6 +27,7 @@ filegroup(
         [
             "tests/*.py",
             "tests/*.json",
+            "tests/gtest_xml/*.xml",
         ],
     ),
 )
@@ -72,7 +73,10 @@ score_pytest(
         "-s",
         "-vv",
     ],
-    data = glob(["tests/*.json"]),
+    data = glob([
+        "tests/*.json",
+        "tests/gtest_xml/*.xml",
+    ]),
     imports = ["."],
     deps = [
         ":score_source_code_linker",

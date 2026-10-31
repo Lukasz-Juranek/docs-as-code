@@ -490,6 +490,218 @@ def test_parse_testcase_source_dirs_non_list_raises():
         xml_parser.parse_testcase_source_dirs('"not a list"')
 
 
+#     ╭──────────────────────────────────────────────────────────────────────╮
+#     │  Tests for GoogleTest failures outside of a test body (suite-level)  │
+#     ╰──────────────────────────────────────────────────────────────────────╯
+
+# Real GoogleTest v1.17.0 reports, see the comment in each file for its source.
+GTEST_XML_DIR = Path(__file__).absolute().parent / "gtest_xml"
+
+
+def _read_gtest_fixture(
+    tmp_path: Path, fixture: str, allowed_dirs: list[str] | None = None
+) -> dict[str, tuple[str, str]]:
+    """Parse a GoogleTest fixture, return {testcase name: (result, result_text)}"""
+    test_xml = tmp_path / "bazel-testlogs" / "gtest" / "test.xml"
+    test_xml.parent.mkdir(parents=True)
+    test_xml.write_bytes((GTEST_XML_DIR / fixture).read_bytes())
+    needs, _, _ = xml_parser.read_test_xml_file(test_xml, None, allowed_dirs)
+    results: dict[str, tuple[str, str]] = {}
+    for need in needs:
+        assert need.name is not None
+        assert need.name not in results
+        results[need.name] = (str(need.result), str(need.result_text))
+    return results
+
+
+def _results(results: dict[str, tuple[str, str]]) -> dict[str, str]:
+    return {name: result for name, (result, _) in results.items()}
+
+
+@add_test_properties(
+    partially_verifies=["tool_req__docs_test_link_testcase"],
+    test_type="requirements-based",
+    derivation_technique="requirements-analysis",
+)
+def test_is_suite_level_entry():
+    """Only entries without 'name' and 'classname' are suite-level entries."""
+    assert xml_parser.is_suite_level_entry(
+        ET.Element("testcase", {"name": "", "classname": ""})
+    )
+    assert xml_parser.is_suite_level_entry(ET.Element("testcase"))
+    assert not xml_parser.is_suite_level_entry(
+        ET.Element("testcase", {"name": "a", "classname": ""})
+    )
+    assert not xml_parser.is_suite_level_entry(
+        ET.Element("testcase", {"name": "", "classname": "Suite"})
+    )
+
+
+@add_test_properties(
+    partially_verifies=["tool_req__docs_test_link_testcase"],
+    test_type="requirements-based",
+    derivation_technique="requirements-analysis",
+)
+def test_find_suite_level_failure():
+    """The failure message of a failed suite-level entry is returned."""
+    suite = ET.Element("testsuite", {"name": "Suite"})
+    ET.SubElement(suite, "testcase", {"name": "a", "classname": "Suite"})
+    assert xml_parser.find_suite_level_failure(suite) is None
+    entry = ET.SubElement(suite, "testcase", {"name": "", "classname": ""})
+    ET.SubElement(entry, "failure", {"message": "suite-level"})
+    assert xml_parser.find_suite_level_failure(suite) == "suite-level"
+
+
+@add_test_properties(
+    partially_verifies=["tool_req__docs_test_link_testcase"],
+    test_type="requirements-based",
+    derivation_technique="requirements-analysis",
+)
+def test_apply_suite_level_failure():
+    """Only 'passed' is turned into 'failed' by a suite-level failure."""
+    apply = xml_parser.apply_suite_level_failure
+    assert apply(("passed", ""), None) == ("passed", "")
+    result, result_text = apply(("passed", ""), "suite-level")
+    assert result == "failed"
+    assert "suite-level" in result_text
+    assert apply(("failed", "err"), "suite-level") == ("failed", "err")
+    assert apply(("skipped", "skp"), "suite-level") == ("skipped", "skp")
+    assert apply(("disabled", ""), "suite-level") == ("disabled", "")
+
+
+@add_test_properties(
+    partially_verifies=["tool_req__docs_test_link_testcase"],
+    test_type="requirements-based",
+    derivation_technique="requirements-analysis",
+)
+@patch("src.extensions.score_source_code_linker.xml_parser.parse_repo_name_from_path")
+def test_gtest_set_up_test_suite_failure(mock_parse_module: Any, tmp_path: Path):
+    """
+    A failure in SetUpTestSuite does not crash the parser. GoogleTest skips the
+    testcases of the affected testsuite, other testsuites are not affected.
+    """
+    mock_parse_module.return_value = "local_repo"
+    results = _read_gtest_fixture(tmp_path, "setup_suite_fail.xml")
+    assert _results(results) == {
+        "SetUpSuiteAddFailure__First": "skipped",
+        "SetUpSuiteAddFailure__Second": "skipped",
+        "SetUpSuiteFatal__First": "skipped",
+        "SetUpSuiteFatal__Second": "skipped",
+        "Healthy__Passes": "passed",
+    }
+
+
+@add_test_properties(
+    partially_verifies=["tool_req__docs_test_link_testcase"],
+    test_type="requirements-based",
+    derivation_technique="requirements-analysis",
+)
+@patch("src.extensions.score_source_code_linker.xml_parser.parse_repo_name_from_path")
+def test_gtest_tear_down_test_suite_failure(mock_parse_module: Any, tmp_path: Path):
+    """
+    A failure in TearDownTestSuite does not crash the parser. GoogleTest reports
+    the testcases of the affected testsuite as passed, they must be 'failed'.
+    """
+    mock_parse_module.return_value = "local_repo"
+    results = _read_gtest_fixture(tmp_path, "teardown_suite_fail.xml")
+    assert _results(results) == {
+        "TearDownSuiteFailure__First": "failed",
+        "TearDownSuiteFailure__Second": "failed",
+        "Healthy__Passes": "passed",
+    }
+    assert "failure in TearDownTestSuite" in results["TearDownSuiteFailure__First"][1]
+    assert results["Healthy__Passes"][1] == ""
+
+
+@add_test_properties(
+    partially_verifies=["tool_req__docs_test_link_testcase"],
+    test_type="requirements-based",
+    derivation_technique="requirements-analysis",
+)
+@patch("src.extensions.score_source_code_linker.xml_parser.parse_repo_name_from_path")
+def test_gtest_environment_set_up_failure(mock_parse_module: Any, tmp_path: Path):
+    """
+    A failure in a global test environment SetUp does not crash the parser.
+    GoogleTest skips all testcases.
+    """
+    mock_parse_module.return_value = "local_repo"
+    results = _read_gtest_fixture(tmp_path, "env_setup_fail.xml")
+    assert _results(results) == {
+        "EnvSuite__NotExecuted": "skipped",
+        "EnvSuite__AlsoNotExecuted": "skipped",
+    }
+
+
+@add_test_properties(
+    partially_verifies=["tool_req__docs_test_link_testcase"],
+    test_type="requirements-based",
+    derivation_technique="requirements-analysis",
+)
+@patch("src.extensions.score_source_code_linker.xml_parser.parse_repo_name_from_path")
+def test_gtest_environment_tear_down_failure(mock_parse_module: Any, tmp_path: Path):
+    """
+    A failure in a global test environment TearDown does not crash the parser.
+    GoogleTest reports all testcases as passed, they must be 'failed'.
+    """
+    mock_parse_module.return_value = "local_repo"
+    results = _read_gtest_fixture(tmp_path, "env_teardown_fail.xml")
+    assert _results(results) == {
+        "EnvSuite__Passes": "failed",
+        "EnvSuite__AlsoPasses": "failed",
+    }
+    assert "failure in Environment::TearDown" in results["EnvSuite__Passes"][1]
+
+
+@add_test_properties(
+    partially_verifies=["tool_req__docs_test_link_testcase"],
+    test_type="requirements-based",
+    derivation_technique="requirements-analysis",
+)
+@patch("src.extensions.score_source_code_linker.xml_parser.parse_repo_name_from_path")
+def test_gtest_environment_set_up_skip(mock_parse_module: Any, tmp_path: Path):
+    """
+    Documents a GoogleTest limitation: after GTEST_SKIP() in a global test
+    environment SetUp the testcases do not run, but the report is identical to
+    one of passed testcases. The parser cannot tell the difference.
+    """
+    mock_parse_module.return_value = "local_repo"
+    results = _read_gtest_fixture(tmp_path, "env_setup_skip.xml")
+    assert _results(results) == {
+        "EnvSuite__Skipped": "passed",
+        "EnvSuite__AlsoSkipped": "passed",
+    }
+
+
+@add_test_properties(
+    partially_verifies=["tool_req__docs_test_link_testcase"],
+    test_type="requirements-based",
+    derivation_technique="requirements-analysis",
+)
+@patch("src.extensions.score_source_code_linker.xml_parser.parse_repo_name_from_path")
+def test_gtest_suite_level_failure_with_testcase_source_dirs(
+    mock_parse_module: Any, tmp_path: Path
+):
+    """
+    The suite-level entry has no 'file' attribute and is therefore never in
+    scope of testcase_source_dirs. Its failure must still be applied to the
+    in-scope testcases of the affected testsuite.
+    """
+    mock_parse_module.return_value = "local_repo"
+    results = _read_gtest_fixture(tmp_path, "teardown_suite_fail.xml", ["src/gtest"])
+    assert _results(results) == {
+        "TearDownSuiteFailure__First": "failed",
+        "TearDownSuiteFailure__Second": "failed",
+        "Healthy__Passes": "passed",
+    }
+    results = _read_gtest_fixture(
+        tmp_path / "env", "env_teardown_fail.xml", ["src/gtest"]
+    )
+    assert _results(results) == {
+        "EnvSuite__Passes": "failed",
+        "EnvSuite__AlsoPasses": "failed",
+    }
+
+
 #            ─────────────[ Boilerplate generated by CoPilot ]─────────────
 
 
