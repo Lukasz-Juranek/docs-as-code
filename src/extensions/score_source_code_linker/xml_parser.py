@@ -191,6 +191,98 @@ def parse_testcase_result(testcase: ET.Element) -> tuple[str, str]:
     )
 
 
+# Name of the extra <testsuite> in which GoogleTest reports failures of a global
+# ::testing::Environment (in its SetUp or TearDown).
+GTEST_ENVIRONMENT_SUITE = "NonTestSuiteFailure"
+
+
+def is_suite_level_entry(testcase: ET.Element) -> bool:
+    """
+    Returns True for an entry that is not a testcase, but a failure that
+    happened outside of any test body.
+
+    GoogleTest (checked with v1.17.0 and v1.18.0) reports a failure in
+    SetUpTestSuite() or TearDownTestSuite() as a <testcase> without 'name' and
+    'classname' inside the affected <testsuite>. A failure in a global
+    ::testing::Environment is reported the same way, inside an extra
+    <testsuite name="NonTestSuiteFailure">.
+    Example:
+        => <testcase name="" status="run" result="completed" classname="">
+             <failure message="..."></failure>
+           </testcase>
+    """
+    return not testcase.get("name") and not testcase.get("classname")
+
+
+def find_suite_level_failure(testsuite: ET.Element) -> str | None:
+    """
+    Returns the message of the first failed suite-level entry inside the
+    testsuite, or None if there is no such entry.
+    """
+    for testcase in testsuite.findall("testcase"):
+        if not is_suite_level_entry(testcase):
+            continue
+        result, result_text = parse_testcase_result(testcase)
+        if result == "failed":
+            return result_text
+    return None
+
+
+def get_suite_level_failures(
+    file: Path, testsuites: list[ET.Element]
+) -> list[str | None]:
+    """
+    Returns for each testsuite the failure outside of any test body that affects
+    its testcases, or None.
+
+    A failure in SetUpTestSuite or TearDownTestSuite affects the testcases of
+    its testsuite. A failure of the global test environment affects every
+    testcase in the file.
+    """
+    environment_failure = None
+    for testsuite in testsuites:
+        if testsuite.get("name") == GTEST_ENVIRONMENT_SUITE:
+            environment_failure = find_suite_level_failure(testsuite)
+            if environment_failure is not None:
+                logger.info(
+                    f"Global test environment in {file} failed. "
+                    "No testcase of this file is reported as 'passed'."
+                )
+                break
+    suite_failures: list[str | None] = []
+    for testsuite in testsuites:
+        suite_failure = find_suite_level_failure(testsuite)
+        if suite_failure is None:
+            suite_failure = environment_failure
+        elif testsuite.get("name") != GTEST_ENVIRONMENT_SUITE:
+            logger.info(
+                f"Testsuite '{testsuite.get('name')}' in {file} failed outside of "
+                "any testcase. None of its testcases is reported as 'passed'."
+            )
+        suite_failures.append(suite_failure)
+    return suite_failures
+
+
+def apply_suite_level_failure(
+    testcase_result: tuple[str, str], suite_failure: str | None
+) -> tuple[str, str]:
+    """
+    Returns 'failed' instead of 'passed' if the testcase is affected by a
+    failure outside of any test body, as GoogleTest still reports such testcases
+    as passed in some cases (e.g. a failure in TearDownTestSuite).
+    'skipped' and 'disabled' are kept, they do not count as passed either.
+    GoogleTest skips the testcases if SetUpTestSuite or the global test
+    environment SetUp failed.
+    """
+    if suite_failure is None or testcase_result[0] != "passed":
+        return testcase_result
+    return (
+        "failed",
+        "Failure outside of the testcase (e.g. SetUpTestSuite, "
+        f"TearDownTestSuite or global test environment): {suite_failure}",
+    )
+
+
 def parse_properties(case_properties: dict[str, Any], properties: Element):
     for prop in properties:
         prop_name = prop.get("name", "")
@@ -224,24 +316,26 @@ def read_test_xml_file(
     tree = ET.parse(file)
     root = tree.getroot()
     md = get_metadata_from_test_path(file, known_good_json)
-    for testsuite in root.findall("testsuite"):
+    testsuites = root.findall("testsuite")
+    suite_failures = get_suite_level_failures(file, testsuites)
+    for testsuite, suite_failure in zip(testsuites, suite_failures, strict=True):
         for testcase in testsuite.findall("testcase"):
+            # Suite-level entries are no testcases of their own, their failure is
+            # applied to the affected testcases instead (see below).
+            if is_suite_level_entry(testcase):
+                continue
             test_file = testcase.get("file")
             # When testcase_source_dirs is configured, only testcases whose source
             # file lives under one of the allowed directories are turned into needs.
-            # Out-of-scope testcases are skipped here (before the mandatory
-            # name/classname assertion below) so they are neither added as needs nor
-            # cached. Skipping early also keeps a scoped build robust against
-            # malformed test.xml files emitted by unrelated, out-of-scope tests.
+            # Out-of-scope testcases are skipped here so they are neither added as
+            # needs nor cached. Skipping early also keeps a scoped build robust
+            # against malformed test.xml files emitted by unrelated, out-of-scope
+            # tests.
             if not is_testcase_in_scope(test_file, allowed_dirs):
                 continue
             case_properties = {}
             testcasename = testcase.get("name", "")
             testclassname = testcase.get("classname", "")
-            assert testclassname or testcasename, (
-                f"One testcase in {file} does not have a 'name' or 'classname' attribute."
-                "One of which is mandatory. This should not happen, something is wrong."
-            )
             if testclassname:
                 testcn = testclassname.split(".")[-1]
                 testname = "__".join([testcn, testcasename])
@@ -267,7 +361,9 @@ def read_test_xml_file(
             case_properties["file"] = test_file
             case_properties["line"] = line
             case_properties["result"], case_properties["result_text"] = (
-                parse_testcase_result(testcase)
+                apply_suite_level_failure(
+                    parse_testcase_result(testcase), suite_failure
+                )
             )
 
             properties_element = testcase.find("properties")
